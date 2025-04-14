@@ -68,7 +68,7 @@ void showWelcomeScreen() {
   M5.Lcd.print("welcome");
 }
 
-// 電圧計測補正関数（テスタでの測定値3点を反映） 
+// 電圧計測補正関数（テスタでの測定値3点を元に最小二乗法で導出） 
 float calibrateVoltage(float rawVoltage) {
   return rawVoltage * 0.8186 + 4.23;
 }
