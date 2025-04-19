@@ -1,10 +1,18 @@
 #include <M5StickCPlus2.h>
-#include <M5GFX.h>  // ← 追加！
+#include <M5GFX.h>  
+#include "UGOKU_Pad_Controller.hpp" 
 
 #define Ef5 622
 #define Bf4 466
 #define Af4 415
 #define Ef4 311
+
+UGOKU_Pad_Controller controller;      // Instantiate the UGOKU Pad Controller object
+uint8_t CH;                           // Variable to store the channel number
+uint8_t VAL;                          // Variable to store the value for the servo control
+
+bool isConnected = false;             // Boolean flag to track BLE connection status
+
 
 const int buzzerPin = 2;  // G2 ピンにブザー
 
@@ -106,12 +114,26 @@ void drawBattery(float voltage, float percentage) {
   }
 }
 
+// Function called when a BLE device connects
+void onDeviceConnect() {
+  Serial.println("Device connected!");  // Print connection message
+  isConnected = true;                   // Set the connection flag to true
+}
+
+// Function called when a BLE device disconnects
+void onDeviceDisconnect() {
+  Serial.println("Device disconnected!");  // Print disconnection message
+  isConnected = false;                     // Set the connection flag to false
+}
+
 void setup() {
+  Serial.begin(115200);  
   M5.begin();
   M5.Lcd.setRotation(3);
   showWelcomeScreen();
   analogReadResolution(12);
   playXPSound();
+  
 
   // スプライト初期化
   sprite.createSprite(spriteWidth, spriteHeight);
@@ -122,6 +144,13 @@ void setup() {
   pinMode(BUTTON_SET_LOW, INPUT_PULLUP);
   pinMode(CONTROL_PIN, OUTPUT);
   digitalWrite(CONTROL_PIN, controlState);
+
+  // Setup the BLE connection
+  controller.setup("GYRO");       // Set the BLE device name to "My ESP32"
+
+  // Set callback functions for when a device connects and disconnects
+  controller.setOnConnectCallback(onDeviceConnect);   // Function called on device connection
+  controller.setOnDisconnectCallback(onDeviceDisconnect);  // Function called on device disconnection
 }
 
 void loop() {
@@ -202,6 +231,28 @@ void loop() {
   if (prevBtnLow == HIGH && currBtnLow == LOW) {
     controlState = LOW;
     digitalWrite(CONTROL_PIN, controlState);
+  }
+
+  if(isConnected) {
+    controller.read_data();             // Read data from the BLE device
+    CH = controller.get_ch();           // Get the channel number from the controller
+    VAL = controller.get_val();         // Get the value (servo position or other data)
+
+    Serial.print("Channel: ");
+    Serial.print(CH);
+    Serial.print("  ");
+    Serial.print("Value : ");
+    Serial.println(VAL);
+
+    switch(CH){
+      case 1:
+      if(VAL == 1){
+        controlState = !controlState;
+        digitalWrite(CONTROL_PIN, controlState);
+      }
+      break;
+    }
+
   }
 
   prevBtnHigh = currBtnHigh;
