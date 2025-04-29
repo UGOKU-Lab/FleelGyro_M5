@@ -53,9 +53,26 @@ uint8_t UGOKU_Pad_Controller::read_data(void) {
 
   // Read the value from the characteristic (received from the BLE client)
   //String value = pCharacteristic->getValue();
-  std::string stdValue = pCharacteristic->getValue();
-  String value = String(stdValue.c_str());
 
+  //aoki Add ↓
+  std::string value = pCharacteristic->getValue();
+
+  if (value.length() == 3) {
+    ch = static_cast<uint8_t>(value[0]);
+    val = static_cast<uint8_t>(value[1]);
+    cs = static_cast<uint8_t>(value[2]);
+
+    if ((ch ^ val) == cs) {
+      if (ch < MAX_CHANNELS) {
+        data_array[ch] = val;
+      }
+      err_num = no_err;
+    } else {
+      ch = val = cs = 0xFF;
+      err_num = cs_err;
+    }
+  }
+  //aoki add ↑
 
   if (value.length() == 3) {  // Check if the value has exactly 3 bytes
     // Parse the received data

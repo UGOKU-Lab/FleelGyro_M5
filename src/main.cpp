@@ -33,7 +33,9 @@ const int CONTROL_PIN     = 32;  // G32
 
 bool prevBtnHigh = HIGH;
 bool prevBtnLow = HIGH;
-bool controlState = LOW;
+bool setControlState = LOW;
+int prevValCh0 = HIGH;
+int prevValCh1 = HIGH;
 
 // M5GFX用スプライト（TFT_eSPIではなくLGFX_Spriteを使う！）
 LGFX_Sprite sprite = LGFX_Sprite(&M5.Lcd);
@@ -143,7 +145,7 @@ void setup() {
   pinMode(BUTTON_SET_HIGH, INPUT_PULLUP);
   pinMode(BUTTON_SET_LOW, INPUT_PULLUP);
   pinMode(CONTROL_PIN, OUTPUT);
-  digitalWrite(CONTROL_PIN, controlState);
+  digitalWrite(CONTROL_PIN, setControlState);
 
   // Setup the BLE connection
   controller.setup("GYRO");       // Set the BLE device name to "My ESP32"
@@ -161,9 +163,9 @@ void loop() {
   float percentage = constrain((batteryVoltage - 20.5) / (25.2 - 20.5) * 100.0, 0.0, 100.0);
 
   // 回転数（仮：固定値 or センサー値に置換）
-  if(controlState == LOW){
+  if(setControlState == LOW){
     rpm = 0;
-  }else if(controlState == HIGH){
+  }else if(setControlState == HIGH){
     rpm = 7000; 
   }
 
@@ -222,15 +224,10 @@ void loop() {
   bool currBtnLow = digitalRead(BUTTON_SET_LOW);
 
   // G0押された（HIGHにする）
-  if (prevBtnHigh == HIGH && currBtnHigh == LOW) {
-    controlState = HIGH;
-    digitalWrite(CONTROL_PIN, controlState);
-  }
-
-  // G26押された（LOWにする）
-  if (prevBtnLow == HIGH && currBtnLow == LOW) {
-    controlState = LOW;
-    digitalWrite(CONTROL_PIN, controlState);
+  if (prevBtnHigh == HIGH && currBtnHigh == LOW) {  // G0押された（HIGHにする）
+    setControlState = HIGH;
+  }else if(prevBtnLow == HIGH && currBtnLow == LOW) {  // G26押された（LOWにする）
+    setControlState = LOW;
   }
 
   if(isConnected) {
@@ -238,25 +235,31 @@ void loop() {
     CH = controller.get_ch();           // Get the channel number from the controller
     VAL = controller.get_val();         // Get the value (servo position or other data)
 
+    // --- BLE入力のエッジ検出で制御 ---
+    if (CH == 0 && VAL == HIGH && prevValCh0 == LOW) {
+      setControlState = HIGH;  // ボタンA押された瞬間だけ反応
+    }
+    if (CH == 1 && VAL == HIGH && prevValCh1 == LOW) {
+      setControlState = LOW;   // ボタンB押された瞬間だけ反応
+    }
+
+    // 前回値を更新（次回に使うため）
+    if (CH == 0) prevValCh0 = VAL;
+    if (CH == 1) prevValCh1 = VAL;
+
+    controller.write_data(2,rpm/100);
+
     Serial.print("Channel: ");
     Serial.print(CH);
     Serial.print("  ");
     Serial.print("Value : ");
     Serial.println(VAL);
-
-    switch(CH){
-      case 1:
-      if(VAL == 1){
-        controlState = !controlState;
-        digitalWrite(CONTROL_PIN, controlState);
-      }
-      break;
-    }
-
   }
+
+  digitalWrite(CONTROL_PIN, setControlState);
 
   prevBtnHigh = currBtnHigh;
   prevBtnLow = currBtnLow;
 
-  delay(50);
+  delay(20);
 }
