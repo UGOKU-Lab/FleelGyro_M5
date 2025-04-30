@@ -7,12 +7,10 @@
 #define Af4 415
 #define Ef4 311
 
-UGOKU_Pad_Controller controller;      // Instantiate the UGOKU Pad Controller object
-uint8_t CH;                           // Variable to store the channel number
-uint8_t VAL;                          // Variable to store the value for the servo control
-
-bool isConnected = false;             // Boolean flag to track BLE connection status
-
+UGOKU_Pad_Controller controller;      // BLEコントローラオブジェクト
+uint8_t CH;                           // BLEチャンネル
+uint8_t VAL;                          // BLEボタン値
+bool isConnected = false;             // BLE接続状態
 
 const int buzzerPin = 2;  // G2 ピンにブザー
 
@@ -29,25 +27,28 @@ int temp = 23;
 //仮GPIOコントロール
 const int BUTTON_SET_LOW = 26;   // G26
 const int BUTTON_SET_HIGH = 0;  // G0
-const int CONTROL_PIN     = 32;  // G32
+//const int CONTROL_PIN     = 32;  // G32
 
 bool prevBtnHigh = HIGH;
 bool prevBtnLow = HIGH;
-bool setControlState = LOW;
+uint8_t setControlState = 0;
 int prevValCh0 = HIGH;
 int prevValCh1 = HIGH;
+int prevValCh2 = HIGH;
 
-// M5GFX用スプライト（TFT_eSPIではなくLGFX_Spriteを使う！）
+// UART通信用（追加） ← 追加
+//bool prevSentControlState = !setControlState;  // 初回は必ず送信 ← 追加
+uint8_t prevSentControlState = 0xFF;
+String uartRxBuffer = "";                      // STM32からの文字列受信用 ← 追加
+
+// M5GFX用スプライト
 LGFX_Sprite sprite = LGFX_Sprite(&M5.Lcd);
 const int spriteWidth = 240;
 const int spriteHeight = 135;
-
 uint16_t SFGreen = sprite.color565(0, 255, 180);
 
 void playXPSound() {
-  float qn = 0.3;  // 基準：300ms = 0.3秒（4分音符）
-
-  //delay(1000); // 起動後の余白
+  float qn = 0.3;
 
   tone(buzzerPin, Ef5); delay(qn * 3 / 4 * 1500);     
   tone(buzzerPin, Ef4); delay(qn * 500);     
@@ -55,30 +56,21 @@ void playXPSound() {
   tone(buzzerPin, Af4); delay(qn * 1500);   
   tone(buzzerPin, Ef5); delay(qn * 1000);         
   tone(buzzerPin, Bf4); delay(qn * 2000);     
-
-  noTone(buzzerPin);  // 停止
+  noTone(buzzerPin); 
 }
 
 void showWelcomeScreen() {
-  //背景（上・中・下）
-  M5.Lcd.fillRect(0, 0, 240, 45, 0x0010);   // 濃い青
-  M5.Lcd.fillRect(0, 18, 240, 120, 0x03BF);  // 中間の青
-  M5.Lcd.fillRect(0, 117, 240, 45, 0x0010);  // 濃い青
-  
-  // 水色ライン
+  M5.Lcd.fillRect(0, 0, 240, 45, 0x0010);
+  M5.Lcd.fillRect(0, 18, 240, 120, 0x03BF);
+  M5.Lcd.fillRect(0, 117, 240, 45, 0x0010);
   M5.Lcd.drawLine(0, 18, 240, 18, 0x7DDF);
-  
-  // 赤いライン
   M5.Lcd.drawLine(0, 117, 240, 117, 0xF800);
-  
-  // 「ようこそ」文字（中央やや右下寄り）
   M5.Lcd.setTextSize(2);
   M5.Lcd.setTextColor(WHITE, 0x03BF);
-  M5.Lcd.setCursor(120, 135/2 - 16/2); // 適度に右下へ
+  M5.Lcd.setCursor(120, 135/2 - 16/2);
   M5.Lcd.print("welcome");
 }
 
-// 電圧計測補正関数（テスタでの測定値3点を元に最小二乗法で導出） 
 float calibrateVoltage(float rawVoltage) {
   return rawVoltage * 0.8186 + 4.23;
 }
@@ -116,58 +108,47 @@ void drawBattery(float voltage, float percentage) {
   }
 }
 
-// Function called when a BLE device connects
 void onDeviceConnect() {
-  Serial.println("Device connected!");  // Print connection message
-  isConnected = true;                   // Set the connection flag to true
+  Serial.println("Device connected!");
+  isConnected = true;
 }
 
-// Function called when a BLE device disconnects
 void onDeviceDisconnect() {
-  Serial.println("Device disconnected!");  // Print disconnection message
-  isConnected = false;                     // Set the connection flag to false
+  Serial.println("Device disconnected!");
+  isConnected = false;
 }
 
 void setup() {
-  Serial.begin(115200);  
   M5.begin();
+  Serial.begin(115200);
+  Serial2.begin(19200, SERIAL_8N1, 33, 32);  // ← UART初期化（STM32と通信）
   M5.Lcd.setRotation(3);
   showWelcomeScreen();
   analogReadResolution(12);
   playXPSound();
-  
 
-  // スプライト初期化
   sprite.createSprite(spriteWidth, spriteHeight);
   sprite.setTextColor(SFGreen, BLACK);
 
-  //仮GPIOコントロール
   pinMode(BUTTON_SET_HIGH, INPUT_PULLUP);
   pinMode(BUTTON_SET_LOW, INPUT_PULLUP);
-  pinMode(CONTROL_PIN, OUTPUT);
-  digitalWrite(CONTROL_PIN, setControlState);
+  //pinMode(CONTROL_PIN, OUTPUT);
+  //digitalWrite(CONTROL_PIN, setControlState);
 
-  // Setup the BLE connection
-  controller.setup("GYRO");       // Set the BLE device name to "My ESP32"
-
-  // Set callback functions for when a device connects and disconnects
-  controller.setOnConnectCallback(onDeviceConnect);   // Function called on device connection
-  controller.setOnDisconnectCallback(onDeviceDisconnect);  // Function called on device disconnection
+  controller.setup("GYRO");
+  controller.setOnConnectCallback(onDeviceConnect);
+  controller.setOnDisconnectCallback(onDeviceDisconnect);
 }
 
 void loop() {
-  // 電圧計算
+  //Serial2.write('A');  // 毎回Aを送る
+  //delay(1000);         // 1秒間隔で送信
+
+  // --- 電圧測定・表示 ---
   int raw = analogRead(analogPin);
   float voltageAtPin = (raw / adcMax) * vRef;
   float batteryVoltage = calibrateVoltage(voltageAtPin / voltageDividerRatio);
   float percentage = constrain((batteryVoltage - 20.5) / (25.2 - 20.5) * 100.0, 0.0, 100.0);
-
-  // 回転数（仮：固定値 or センサー値に置換）
-  if(setControlState == LOW){
-    rpm = 0;
-  }else if(setControlState == HIGH){
-    rpm = 7000; 
-  }
 
   // スプライトに描画
   sprite.fillSprite(BLACK);
@@ -219,47 +200,62 @@ void loop() {
     esp_deep_sleep_start();    // 自動スリープ！
   }
 
-  //仮GPIOコントロール
+  // --- GPIOボタン処理 ---
   bool currBtnHigh = digitalRead(BUTTON_SET_HIGH);
   bool currBtnLow = digitalRead(BUTTON_SET_LOW);
-
-  // G0押された（HIGHにする）
-  if (prevBtnHigh == HIGH && currBtnHigh == LOW) {  // G0押された（HIGHにする）
-    setControlState = HIGH;
-  }else if(prevBtnLow == HIGH && currBtnLow == LOW) {  // G26押された（LOWにする）
-    setControlState = LOW;
+  if (prevBtnHigh == HIGH && currBtnHigh == LOW) {
+    setControlState = 1;
+  } else if (prevBtnLow == HIGH && currBtnLow == LOW) {
+    setControlState = 0;
   }
 
+  // --- BLEボタン処理 ---
   if(isConnected) {
-    controller.read_data();             // Read data from the BLE device
-    CH = controller.get_ch();           // Get the channel number from the controller
-    VAL = controller.get_val();         // Get the value (servo position or other data)
+    controller.read_data();
+    CH = controller.get_ch();
+    VAL = controller.get_val();
 
-    // --- BLE入力のエッジ検出で制御 ---
     if (CH == 0 && VAL == HIGH && prevValCh0 == LOW) {
-      setControlState = HIGH;  // ボタンA押された瞬間だけ反応
-    }
-    if (CH == 1 && VAL == HIGH && prevValCh1 == LOW) {
-      setControlState = LOW;   // ボタンB押された瞬間だけ反応
+      setControlState = 0;
+    }else if(CH == 1 && VAL == HIGH && prevValCh1 == LOW){
+      setControlState = 1;
+    }else if(CH == 2 && VAL == HIGH && prevValCh1 == LOW){
+      setControlState = 2;
     }
 
-    // 前回値を更新（次回に使うため）
     if (CH == 0) prevValCh0 = VAL;
     if (CH == 1) prevValCh1 = VAL;
+    if (CH == 2) prevValCh2 = VAL;
 
-    controller.write_data(2,rpm/100);
-
-    Serial.print("Channel: ");
-    Serial.print(CH);
-    Serial.print("  ");
-    Serial.print("Value : ");
-    Serial.println(VAL);
+    controller.write_data(2, rpm / 100);  // 回転数の送信（あくまでBLE用）
   }
-
-  digitalWrite(CONTROL_PIN, setControlState);
 
   prevBtnHigh = currBtnHigh;
   prevBtnLow = currBtnLow;
+
+  // --- setControlState を STM32 に送信（4バイトのint32_t） ← 追加 ---
+  if (setControlState != prevSentControlState) {
+    Serial.printf("[UART SEND] ControlState = %d\n\r", setControlState);  // 送信前にログ
+    size_t written = Serial2.write(&setControlState, 1);
+    Serial.printf("[UART SEND] bytes written: %d\n\r", written);
+    prevSentControlState = setControlState;
+  }
+
+  // --- STM32からの "RPM value : xxxx\r\n" を受信してrpmに反映 ← 追加 ---
+  while (Serial2.available()) {
+    char c = Serial2.read();
+    //Serial.write(c);
+    if (c == '\n') {
+      if (uartRxBuffer.startsWith("RPM value : ")) {
+        int newRpm = uartRxBuffer.substring(12).toInt();
+        rpm = newRpm;
+        //Serial.printf("Received RPM: %d\n\r", rpm);
+      }
+      uartRxBuffer = "";
+    } else if (c != '\r') {
+      uartRxBuffer += c;
+    }
+  }
 
   delay(20);
 }
