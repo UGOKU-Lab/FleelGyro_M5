@@ -13,8 +13,7 @@ uint8_t VAL;                          // Variable to store the value for the ser
 
 bool isConnected = false;             // Boolean flag to track BLE connection status
 
-
-const int buzzerPin = 2;  // G2 ピンにブザー
+const int buzzerPin = 2; 
 
 const int analogPin = 36;
 const float R1 = 2000.0;
@@ -26,10 +25,13 @@ const float vRef = 3.3;
 int rpm = 0; 
 int temp = 23;
 
-//仮GPIOコントロール
-const int BUTTON_SET_LOW = 26;   // G26
-const int BUTTON_SET_HIGH = 0;  // G0
-const int CONTROL_PIN     = 32;  // G32
+//Button
+const int BUTTON_SET_LOW = 26;
+const int BUTTON_SET_HIGH = 0;
+
+//TEMP GPIO Control 
+const int CONTROL_PIN = 32;  // G32
+const int CONTROL_PIN_2 = 33;
 
 bool prevBtnHigh = HIGH;
 bool prevBtnLow = HIGH;
@@ -37,7 +39,7 @@ bool setControlState = LOW;
 int prevValCh0 = HIGH;
 int prevValCh1 = HIGH;
 
-// M5GFX用スプライト（TFT_eSPIではなくLGFX_Spriteを使う！）
+//LGFX_Sprite for M5GFX
 LGFX_Sprite sprite = LGFX_Sprite(&M5.Lcd);
 const int spriteWidth = 240;
 const int spriteHeight = 135;
@@ -45,37 +47,32 @@ const int spriteHeight = 135;
 uint16_t SFGreen = sprite.color565(0, 255, 180);
 
 void playXPSound() {
-  float qn = 0.3;  // 基準：300ms = 0.3秒（4分音符）
-
-  //delay(1000); // 起動後の余白
-
+  float qn = 0.3;
   tone(buzzerPin, Ef5); delay(qn * 3 / 4 * 1500);     
   tone(buzzerPin, Ef4); delay(qn * 500);     
   tone(buzzerPin, Bf4); delay(qn * 1000);        
   tone(buzzerPin, Af4); delay(qn * 1500);   
   tone(buzzerPin, Ef5); delay(qn * 1000);         
   tone(buzzerPin, Bf4); delay(qn * 2000);     
-
-  noTone(buzzerPin);  // 停止
+  noTone(buzzerPin);
 }
 
 void showWelcomeScreen() {
-  //背景（上・中・下）
-  M5.Lcd.fillRect(0, 0, 240, 45, 0x0010);   // 濃い青
-  M5.Lcd.fillRect(0, 18, 240, 120, 0x03BF);  // 中間の青
-  M5.Lcd.fillRect(0, 117, 240, 45, 0x0010);  // 濃い青
+  //background
+  M5.Lcd.fillRect(0, 0, 240, 45, 0x0010);   // dark blue
+  M5.Lcd.fillRect(0, 18, 240, 120, 0x03BF);  // mid blue
+  M5.Lcd.fillRect(0, 117, 240, 45, 0x0010);  // dark blue
   
-  // 水色ライン
+  //water line
   M5.Lcd.drawLine(0, 18, 240, 18, 0x7DDF);
   
-  // 赤いライン
+  //red line
   M5.Lcd.drawLine(0, 117, 240, 117, 0xF800);
   
-  // 「ようこそ」文字（中央やや右下寄り）
+  //welcome
   M5.Lcd.setTextSize(2);
   M5.Lcd.setTextColor(WHITE, 0x03BF);
-  M5.Lcd.setCursor(120, 135/2 - 16/2); // 適度に右下へ
-  M5.Lcd.print("welcome");
+  M5.Lcd.setCursor(120, 135/2 - 16/2);
 }
 
 // 電圧計測補正関数（テスタでの測定値3点を元に最小二乗法で導出） 
@@ -135,7 +132,6 @@ void setup() {
   showWelcomeScreen();
   analogReadResolution(12);
   playXPSound();
-  
 
   // スプライト初期化
   sprite.createSprite(spriteWidth, spriteHeight);
