@@ -121,7 +121,7 @@ void onDeviceDisconnect() {
 void setup() {
   M5.begin();
   Serial.begin(115200);
-  Serial2.begin(19200, SERIAL_8N1, 33, 32);  // ← UART初期化（STM32と通信）
+  Serial2.begin(38400, SERIAL_8N1, 33, 32);  // ← UART初期化（STM32と通信）
   M5.Lcd.setRotation(3);
   showWelcomeScreen();
   analogReadResolution(12);
@@ -219,7 +219,7 @@ void loop() {
       setControlState = 0;
     }else if(CH == 1 && VAL == HIGH && prevValCh1 == LOW){
       setControlState = 1;
-    }else if(CH == 2 && VAL == HIGH && prevValCh1 == LOW){
+    }else if(CH == 2 && VAL == HIGH && prevValCh2 == LOW){
       setControlState = 2;
     }
 
@@ -257,5 +257,5 @@ void loop() {
     }
   }
 
-  delay(20);
+  delay(30);
 }
