@@ -73,14 +73,13 @@ void showWelcomeScreen() {
   M5.Lcd.setTextSize(2);
   M5.Lcd.setTextColor(WHITE, 0x03BF);
   M5.Lcd.setCursor(120, 135/2 - 16/2);
+  M5.Lcd.print("welcome");
 }
 
-// 電圧計測補正関数（テスタでの測定値3点を元に最小二乗法で導出） 
 float calibrateVoltage(float rawVoltage) {
   return rawVoltage + 1.2;
 }
 
-// バッテリー表示（スプライト描画用）
 void drawBattery(float voltage, float percentage) {
   int margin = 2;
   int x = 40, y = 75;
