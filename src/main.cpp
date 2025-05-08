@@ -30,12 +30,12 @@ const int BUTTON_SET_LOW = 26;
 const int BUTTON_SET_HIGH = 0;
 
 //TEMP GPIO Control 
-const int CONTROL_PIN = 32;  // G32
+const int CONTROL_PIN = 32;
 const int CONTROL_PIN_2 = 33;
 
 bool prevBtnHigh = HIGH;
 bool prevBtnLow = HIGH;
-bool setControlState = LOW;
+int ControlState = 0;
 int prevValCh0 = HIGH;
 int prevValCh1 = HIGH;
 
@@ -141,7 +141,9 @@ void setup() {
   pinMode(BUTTON_SET_HIGH, INPUT_PULLUP);
   pinMode(BUTTON_SET_LOW, INPUT_PULLUP);
   pinMode(CONTROL_PIN, OUTPUT);
-  digitalWrite(CONTROL_PIN, setControlState);
+  pinMode(CONTROL_PIN_2,   OUTPUT); 
+  digitalWrite(CONTROL_PIN, ControlState);
+  digitalWrite(CONTROL_PIN_2, ControlState);
 
   // Setup the BLE connection
   controller.setup("GYRO");       // Set the BLE device name to "My ESP32"
@@ -158,11 +160,19 @@ void loop() {
   float batteryVoltage = calibrateVoltage(voltageAtPin / voltageDividerRatio);
   float percentage = constrain((batteryVoltage - 20.5) / (25.2 - 20.5) * 100.0, 0.0, 100.0);
 
-  // 回転数（仮：固定値 or センサー値に置換）
-  if(setControlState == LOW){
-    rpm = 0;
-  }else if(setControlState == HIGH){
-    rpm = 7000; 
+  switch (ControlState) {
+    case 0b00: // 停止 or 全閉
+      rpm = 0;
+      break;
+    case 0b01: // 全開
+      rpm = 7000;
+      break;
+    case 0b10: // 中速
+      rpm = 3500;
+      break;
+    case 0b11: // ブレーキ（STM 側で制御）
+      rpm = 0;
+      break;
   }
 
   // スプライトに描画
@@ -215,47 +225,34 @@ void loop() {
     esp_deep_sleep_start();    // 自動スリープ！
   }
 
-  //仮GPIOコントロール
-  bool currBtnHigh = digitalRead(BUTTON_SET_HIGH);
-  bool currBtnLow = digitalRead(BUTTON_SET_LOW);
+  // ボタンの押下状態を取得（LOW = 押下）
+  bool btnHigh = (digitalRead(BUTTON_SET_HIGH) == LOW);
+  bool btnLow  = (digitalRead(BUTTON_SET_LOW)  == LOW);
 
-  // G0押された（HIGHにする）
-  if (prevBtnHigh == HIGH && currBtnHigh == LOW) {  // G0押された（HIGHにする）
-    setControlState = HIGH;
-  }else if(prevBtnLow == HIGH && currBtnLow == LOW) {  // G26押された（LOWにする）
-    setControlState = LOW;
+  // BLE の状態を常に読み込む（VAL は瞬間 HIGH パルス）
+  if (isConnected) {
+    controller.read_data();
+    CH  = controller.get_ch();
+    VAL = controller.get_val();
   }
 
-  if(isConnected) {
-    controller.read_data();             // Read data from the BLE device
-    CH = controller.get_ch();           // Get the channel number from the controller
-    VAL = controller.get_val();         // Get the value (servo position or other data)
-
-    // --- BLE入力のエッジ検出で制御 ---
-    if (CH == 0 && VAL == HIGH && prevValCh0 == LOW) {
-      setControlState = HIGH;  // ボタンA押された瞬間だけ反応
+  // 1) ボタン押し優先
+  if (btnHigh) {
+    ControlState = 0b01;   // BUTTON_SET_HIGH → 01
+  } else if (btnLow) {
+    ControlState = 0b11;   // BUTTON_SET_LOW  → 11
+  } else if (isConnected && VAL == HIGH) {
+    switch (CH) {
+      case 0: ControlState = 0b00; break;  // CH0 → 00（停止）
+      case 1: ControlState = 0b01; break;  // CH1 → 01（全開）
+      case 2: ControlState = 0b11; break;  // CH2 → 11（ブレーキ）
+      case 3: ControlState = 0b10; break;  // CH3 → 10（中速）
+      default: break;
     }
-    if (CH == 1 && VAL == HIGH && prevValCh1 == LOW) {
-      setControlState = LOW;   // ボタンB押された瞬間だけ反応
-    }
-
-    // 前回値を更新（次回に使うため）
-    if (CH == 0) prevValCh0 = VAL;
-    if (CH == 1) prevValCh1 = VAL;
-
-    controller.write_data(2,rpm/100);
-
-    Serial.print("Channel: ");
-    Serial.print(CH);
-    Serial.print("  ");
-    Serial.print("Value : ");
-    Serial.println(VAL);
   }
 
-  digitalWrite(CONTROL_PIN, setControlState);
-
-  prevBtnHigh = currBtnHigh;
-  prevBtnLow = currBtnLow;
+  digitalWrite(CONTROL_PIN,   ControlState & 0x01);
+  digitalWrite(CONTROL_PIN_2, (ControlState >> 1) & 0x01);
 
   delay(20);
 }
