@@ -17,7 +17,7 @@ const int buzzerPin = 2;
 
 const int analogPin = 36;
 const float R1 = 2000.0;
-const float R2 = 270.0;
+const float R2 = 220.0;
 const float voltageDividerRatio = R2 / (R1 + R2);
 const float adcMax = 4095.0;
 const float vRef = 3.3;
@@ -77,7 +77,7 @@ void showWelcomeScreen() {
 
 // 電圧計測補正関数（テスタでの測定値3点を元に最小二乗法で導出） 
 float calibrateVoltage(float rawVoltage) {
-  return rawVoltage * 0.8186 + 4.23;
+  return rawVoltage + 1.2;
 }
 
 // バッテリー表示（スプライト描画用）
@@ -159,6 +159,8 @@ void loop() {
   float voltageAtPin = (raw / adcMax) * vRef;
   float batteryVoltage = calibrateVoltage(voltageAtPin / voltageDividerRatio);
   float percentage = constrain((batteryVoltage - 20.5) / (25.2 - 20.5) * 100.0, 0.0, 100.0);
+
+  Serial.printf("%d",ControlState);
 
   switch (ControlState) {
     case 0b00: // 停止 or 全閉
