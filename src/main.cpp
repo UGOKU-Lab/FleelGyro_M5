@@ -16,7 +16,7 @@ const int buzzerPin = 2;  // G2 ピンにブザー
 
 const int analogPin = 36;
 const float R1 = 2000.0;
-const float R2 = 270.0;
+const float R2 = 220.0;
 const float voltageDividerRatio = R2 / (R1 + R2);
 const float adcMax = 4095.0;
 const float vRef = 3.3;
@@ -72,7 +72,7 @@ void showWelcomeScreen() {
 }
 
 float calibrateVoltage(float rawVoltage) {
-  return rawVoltage * 0.8186 + 4.23;
+  return rawVoltage + 1.2;
 }
 
 // バッテリー表示（スプライト描画用）
