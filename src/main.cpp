@@ -17,7 +17,7 @@ const int buzzerPin = 2;
 
 const int analogPin = 36;
 const float R1 = 2000.0;
-const float R2 = 270.0;
+const float R2 = 220.0;
 const float voltageDividerRatio = R2 / (R1 + R2);
 const float adcMax = 4095.0;
 const float vRef = 3.3;
