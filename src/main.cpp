@@ -196,6 +196,7 @@ void loop() {
   sprite.setCursor(130 + (24*4 - 18*3) , 50);  
   sprite.printf("RPM");
 
+  /*
   // 巻き線温度
   sprite.setFont(&fonts::Font0);  
   sprite.setTextSize(4);       
@@ -205,6 +206,7 @@ void loop() {
   sprite.setTextSize(3); 
   sprite.setCursor(130 + (24*4 - (24*2 + 18 + 5)) + 48 + 5,88+6);  
   sprite.printf("C");
+  */
 
   // 数字表示（左寄せ調整）
   sprite.setTextSize(3);
