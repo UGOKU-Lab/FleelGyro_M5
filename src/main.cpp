@@ -249,7 +249,7 @@ void loop() {
       if (uartRxBuffer.startsWith("RPM value : ")) {
         int newRpm = uartRxBuffer.substring(12).toInt();
         rpm = newRpm;
-        //Serial.printf("Received RPM: %d\n\r", rpm);
+        Serial.printf("Received RPM: %d\n\r", rpm);
       }
       uartRxBuffer = "";
     } else if (c != '\r') {
