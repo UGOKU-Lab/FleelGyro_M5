@@ -1,6 +1,8 @@
 #include <M5StickCPlus2.h>
 #include <M5GFX.h>  
 #include "UGOKU_Pad_Controller.hpp" 
+#include "Wire.h"
+#define I2C_DEV_ADDR 0x52
 
 #define Ef5 622
 #define Bf4 466
@@ -10,6 +12,11 @@
 UGOKU_Pad_Controller controller;      // BLEコントローラオブジェクト
 uint8_t CH;                           // BLEチャンネル
 uint8_t VAL;                          // BLEボタン値
+
+uint32_t rpm;
+uint16_t motor_val;
+uint8_t md_set;
+
 bool isConnected = false;             // BLE接続状態
 
 const int buzzerPin = 2;  // G2 ピンにブザー
@@ -27,7 +34,7 @@ int temp = 23;
 //仮GPIOコントロール
 const int BUTTON_SET_LOW = 26;   // G26
 const int BUTTON_SET_HIGH = 0;  // G0
-//const int CONTROL_PIN     = 32;  // G32
+
 
 bool prevBtnHigh = HIGH;
 bool prevBtnLow = HIGH;
@@ -121,7 +128,8 @@ void onDeviceDisconnect() {
 void setup() {
   M5.begin();
   Serial.begin(115200);
-  Serial2.begin(38400, SERIAL_8N1, 33, 32);  // ← UART初期化（STM32と通信）
+  //Serial2.begin(38400, SERIAL_8N1, 33, 32);  // ← UART初期化（STM32と通信）
+  Wire.begin(21,22);  //sda,scl,frequency
   M5.Lcd.setRotation(3);
   showWelcomeScreen();
   analogReadResolution(12);
@@ -132,6 +140,7 @@ void setup() {
 
   pinMode(BUTTON_SET_HIGH, INPUT_PULLUP);
   pinMode(BUTTON_SET_LOW, INPUT_PULLUP);
+  
   //pinMode(CONTROL_PIN, OUTPUT);
   //digitalWrite(CONTROL_PIN, setControlState);
 
@@ -233,29 +242,27 @@ void loop() {
   prevBtnHigh = currBtnHigh;
   prevBtnLow = currBtnLow;
 
-  // --- setControlState を STM32 に送信（4バイトのint32_t） ← 追加 ---
-  if (setControlState != prevSentControlState) {
-    Serial.printf("[UART SEND] ControlState = %d\n\r", setControlState);  // 送信前にログ
-    size_t written = Serial2.write(&setControlState, 1);
-    Serial.printf("[UART SEND] bytes written: %d\n\r", written);
-    prevSentControlState = setControlState;
-  }
+  Serial.printf("motor_val = %d\r\n",(int)motor_val);
+  Serial.printf("md_set = %d\r\n",(int)md_set);
 
-  // --- STM32からの "RPM value : xxxx\r\n" を受信してrpmに反映 ← 追加 ---
-  while (Serial2.available()) {
-    char c = Serial2.read();
-    //Serial.write(c);
-    if (c == '\n') {
-      if (uartRxBuffer.startsWith("RPM value : ")) {
-        int newRpm = uartRxBuffer.substring(12).toInt();
-        rpm = newRpm;
-        Serial.printf("Received RPM: %d\n\r", rpm);
-      }
-      uartRxBuffer = "";
-    } else if (c != '\r') {
-      uartRxBuffer += c;
-    }
+  //Write message to the slave
+  Wire.beginTransmission(I2C_DEV_ADDR);
+  for(int wc=0;wc<3;wc++){
+    Wire.write(setControlState);
   }
+  uint8_t error = Wire.endTransmission(true);
+  Serial.printf("endTransmission: %u\n", error);
+
+  //Read 16 bytes from the slave
+  uint8_t bytesReceived = Wire.requestFrom(I2C_DEV_ADDR, 4);
+  Serial.printf("requestFrom: %u\n", bytesReceived);
+  if((bool)bytesReceived){ //If received more than zero bytes
+    uint8_t temp[bytesReceived];
+    Wire.readBytes(temp, bytesReceived);
+    Serial.printf("rx data %#x, %#x, %#x, %#x\r\n",temp[0],temp[1],temp[2],temp[3]);
+    rpm = temp[3]<<24 | temp[2]<<16 | temp[1]<<8 | temp[0];
+    Serial.printf("I2C val :%d\r\n",(int)rpm);
+  }  
 
   delay(30);
 }
