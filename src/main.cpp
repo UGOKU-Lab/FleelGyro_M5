@@ -28,7 +28,6 @@ const float voltageDividerRatio = R2 / (R1 + R2);
 const float adcMax = 4095.0;
 const float vRef = 3.3;
 
-int rpm = 0; 
 int temp = 23;
 
 //仮GPIOコントロール
@@ -125,6 +124,31 @@ void onDeviceDisconnect() {
   isConnected = false;
 }
 
+void scanI2C() {
+  byte error, address;
+  int nDevices = 0;
+  
+  Serial.println("Scanning...");
+  
+  for(address = 1; address < 127; address++) {
+    Wire.beginTransmission(address);
+    error = Wire.endTransmission();
+    
+    if (error == 0) {
+      Serial.print("I2C device found at address 0x");
+      if (address < 16) Serial.print("0");
+      Serial.print(address, HEX);
+      Serial.println(" !");
+      nDevices++;
+    }
+  }
+  
+  if (nDevices == 0)
+    Serial.println("No I2C devices found\n");
+  else
+    Serial.println("done\n");
+}
+
 void setup() {
   M5.begin();
   Serial.begin(115200);
@@ -147,12 +171,11 @@ void setup() {
   controller.setup("GYRO");
   controller.setOnConnectCallback(onDeviceConnect);
   controller.setOnDisconnectCallback(onDeviceDisconnect);
+
+  //void scanI2C();
 }
 
 void loop() {
-  //Serial2.write('A');  // 毎回Aを送る
-  //delay(1000);         // 1秒間隔で送信
-
   // --- 電圧測定・表示 ---
   int raw = analogRead(analogPin);
   float voltageAtPin = (raw / adcMax) * vRef;
