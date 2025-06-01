@@ -153,7 +153,7 @@ void setup() {
   M5.begin();
   Serial.begin(115200);
   //Serial2.begin(38400, SERIAL_8N1, 33, 32);  // ← UART初期化（STM32と通信）
-  Wire.begin(21,22);  //sda,scl,frequency
+  Wire.begin(32,33);  //sda,scl,frequency
   M5.Lcd.setRotation(3);
   showWelcomeScreen();
   analogReadResolution(12);
