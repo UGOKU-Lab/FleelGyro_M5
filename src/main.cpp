@@ -38,6 +38,10 @@ bool prevBtnLow = HIGH;
 bool setControlState = LOW;
 int prevValCh0 = HIGH;
 int prevValCh1 = HIGH;
+int prevValCh2 = HIGH;
+
+uint8_t lastCh1Val = 0xFF;
+uint8_t lastCh2Val = 0xFF;
 
 //LGFX_Sprite for M5GFX
 LGFX_Sprite sprite = LGFX_Sprite(&M5.Lcd);
@@ -45,6 +49,9 @@ const int spriteWidth = 240;
 const int spriteHeight = 135;
 
 uint16_t SFGreen = sprite.color565(0, 255, 180);
+
+uint8_t lastPrintedCh;
+uint8_t lastPrintedVal;
 
 void playXPSound() {
   float qn = 0.3;
@@ -226,30 +233,30 @@ void loop() {
     setControlState = LOW;
   }
 
-  if(isConnected) {
-    controller.read_data();             // Read data from the BLE device
-    CH = controller.get_ch();           // Get the channel number from the controller
-    VAL = controller.get_val();         // Get the value (servo position or other data)
-
-    // --- BLE入力のエッジ検出で制御 ---
-    if (CH == 0 && VAL == HIGH && prevValCh0 == LOW) {
-      setControlState = HIGH;  // ボタンA押された瞬間だけ反応
+if (isConnected) {
+    uint8_t err = controller.read_data();
+    if (err == no_err) {
+      uint8_t cnt = controller.getLastPairsCount();
+      if (cnt > 0) {
+        // チャンネル1: HIGH → setControlState = HIGH
+        uint8_t ch1 = controller.getDataByChannel(1);
+        if (ch1 != 0xFF && ch1 != lastCh1Val) {
+          lastCh1Val = ch1;
+          if (ch1 == HIGH) setControlState = HIGH;
+        }
+        // チャンネル2: HIGH → setControlState = LOW
+        uint8_t ch2 = controller.getDataByChannel(2);
+        if (ch2 != 0xFF && ch2 != lastCh2Val) {
+          lastCh2Val = ch2;
+          if (ch2 == HIGH) setControlState = LOW;
+        }
+      }
+    } else if (err == cs_err) {
+      Serial.println("Checksum error");
+    } else if (err == data_err) {
+      Serial.println("Packet length error");
     }
-    if (CH == 1 && VAL == HIGH && prevValCh1 == LOW) {
-      setControlState = LOW;   // ボタンB押された瞬間だけ反応
-    }
-
-    // 前回値を更新（次回に使うため）
-    if (CH == 0) prevValCh0 = VAL;
-    if (CH == 1) prevValCh1 = VAL;
-
-    controller.write_data(2,rpm/100);
-
-    Serial.print("Channel: ");
-    Serial.print(CH);
-    Serial.print("  ");
-    Serial.print("Value : ");
-    Serial.println(VAL);
+    controller.write_data(2, rpm / 100);
   }
 
   digitalWrite(CONTROL_PIN, setControlState);
